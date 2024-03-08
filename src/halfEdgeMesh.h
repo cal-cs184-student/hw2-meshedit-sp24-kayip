@@ -627,7 +627,9 @@ namespace CGL
           * basic edge operations.  (Can you generalize to other
           * polygonal meshes?)
           */
-           EdgeIter       flipEdge( EdgeIter e ); ///< flip an edge, returning a pointer to the flipped edge
+           EdgeIter       flipEdge( EdgeIter e );
+           bool isNextConsistent(HalfedgeIter start);
+           ///< flip an edge, returning a pointer to the flipped edge
          VertexIter      splitEdge( EdgeIter e ); ///< split an edge, returning a pointer to the inserted midpoint vertex; the halfedge of this vertex should refer to one of the edges in the original mesh
 
 
