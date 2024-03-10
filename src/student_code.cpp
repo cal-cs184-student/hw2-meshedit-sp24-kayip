@@ -132,7 +132,7 @@ namespace CGL
   {
     // TODO Part 4.
     // This method should flip the given edge and return an iterator to the flipped edge.
-      std::cout << "test!!" << std::endl;
+      // std::cout << "test!!" << std::endl;
       if (e0->isBoundary()) {
           // Can't flip a boundary edge
           std::cout << "can't flip" << std::endl;
@@ -163,7 +163,7 @@ namespace CGL
       FaceIter f1 = h3->face();
 
 
-      check_for(h1);
+      //check_for(h1);
 
       ///*
       
@@ -301,12 +301,14 @@ namespace CGL
       e5->isNew = false;
       EdgeIter e6 = newEdge();
       e6->halfedge() = h0;
-      e5->isNew = true;
+      e6->isNew = true;
       EdgeIter e7 = newEdge();
       e7->halfedge() = h0;
-      e5->isNew = true;
+      e7->isNew = true;
       EdgeIter e8 = newEdge();
       e8->halfedge() = h0;
+
+      
 
       FaceIter f0 = h0->face();
       FaceIter f1 = h3->face();
@@ -489,7 +491,48 @@ namespace CGL
   */
 
   
+  Vector3D oldVertexPos(VertexIter v) {
+      Vector3D sum_vec;
+      HalfedgeIter h = v->halfedge(); // Get the outgoing half-edge of the vertex
+      HalfedgeIter h_orig = h; // Store the original half-edge to detect the full loop
+      int deg = 0;
+      double u = 0.0;
 
+      do {
+          VertexIter neighborVertex = h->twin()->vertex(); // Get the neighboring vertex
+          sum_vec += neighborVertex->position; // Add the neighboring vertex's position
+          deg++; // Increment the degree (number of neighbors)
+          h = h->twin()->next(); // Move to the next outgoing half-edge of the vertex
+      } while (h != h_orig); // Continue until we've made a full loop around the vertex
+
+      if (deg == 3) {
+          u = 3.0 / 16.0;
+      }
+      else {
+          u = (3.0 / 8.0) * (1.0 / deg); // Simplified version, consider using the exact formula for non-triangular meshes
+      }
+
+      return (1.0 - deg * u) * v->position + u * sum_vec;
+  }
+
+
+  Vector3D newVertexPos(EdgeIter e) {
+      // 3/8 * (A + B) + 1/8 * (C + D)
+
+      HalfedgeIter h0 = e->halfedge();
+      HalfedgeIter h1 = h0->next();
+      HalfedgeIter h2 = h1->next();
+      HalfedgeIter h3 = h0->twin();
+      HalfedgeIter h4 = h3->next();
+      HalfedgeIter h5 = h4->next();
+
+      VertexIter a = h0->vertex();
+      VertexIter b = h3->vertex();
+      VertexIter c = h2->vertex();
+      VertexIter d = h5->vertex();
+
+      return (3.0 / 8.0) * (a->position + b->position) + (1.0 / 8.0) * (c->position + d->position);
+  }
 
   void MeshResampler::upsample( HalfedgeMesh& mesh )
   {
@@ -501,6 +544,11 @@ namespace CGL
     // and store them in Vertex::newPosition. At this point, we also want to mark each vertex as being
     // a vertex of the original mesh.
 
+      for (VertexIter v = mesh.verticesBegin(); v != mesh.verticesEnd(); v++) {
+          v->newPosition = oldVertexPos(v);
+          v->isNew = false;
+      }
+
       /*
       for (EdgeIter e = mesh.edgesBegin(); e != mesh.edgesEnd(); e++) {
           if (e->isNew == false) {
@@ -511,9 +559,15 @@ namespace CGL
       }
       */
 
+      // new vertex
+      // 3/8 * (A + B) + 1/8 * (C + D)
+      // old vertices
+      // 
+
+
       
 
-      ///*
+      /*
       
       std::cout << "hihi" << std::endl;
       for (FaceIter f = mesh.facesBegin(); f != mesh.facesEnd(); f++) {
@@ -541,19 +595,91 @@ namespace CGL
       }
 
       
-      //*/
+      */
 
       
     // 2. Compute the updated vertex positions associated with edges, and store it in Edge::newPosition.
+      for (EdgeIter e = mesh.edgesBegin(); e != mesh.edgesEnd(); e++) {
+          if (!e->isBoundary()) {
+              e->isNew = false;
+              e->newPosition = newVertexPos(e);
+          }
+          
+      }
     
     // 3. Split every edge in the mesh, in any order. For future reference, we're also going to store some
     // information about which subdivide edges come from splitting an edge in the original mesh, and which edges
     // are new, by setting the flat Edge::isNew. Note that in this loop, we only want to iterate over edges of
     // the original mesh---otherwise, we'll end up splitting edges that we just split (and the loop will never end!)
-    
+      // Create a list (or vector) of edges to split before modifying the mesh
+      size_t max_edge = mesh.nEdges();
+      std::vector<EdgeIter> originalEdges;
+      for (EdgeIter e = mesh.edgesBegin(); e != mesh.edgesEnd(); ++e) {
+          originalEdges.push_back(e);
+      }
+      int count = 0;
+      for (auto& e : originalEdges) {
+          if (!e->isNew && !e->isBoundary()) { // Make sure we're only splitting original edges
+              VertexIter newVertex = mesh.splitEdge(e);
+              newVertex->isNew = true;
+              newVertex->position = e->newPosition;
+              count++;
+          }
+          //if (count > max_edge - 1) {
+          //    break;
+          //}
+      }
+      std::cout << "edgesplits" << std::endl;
+      std::cout << count << std::endl;
+      count = 0;
+      std::cout << count << std::endl;
+
+      ///*
+      for (EdgeIter e = mesh.edgesBegin(); e != mesh.edgesEnd(); ++e) {
+          // We're only interested in new edges for this operation
+          if (e->isNew) {
+              // Retrieve the vertices of the edge
+              VertexIter v0 = e->halfedge()->vertex();
+              VertexIter v1 = e->halfedge()->twin()->vertex();
+
+              // Check if one vertex is new and the other is old
+              if ((v0->isNew && !v1->isNew) || (!v0->isNew && v1->isNew)) {
+                  // The condition is met, so we attempt to flip the edge
+                  // Note: You should also check if the edge can be flipped.
+                  // For instance, an edge cannot be flipped if it's on the boundary or if flipping would result in an invalid mesh.
+                  if (!e->isBoundary()) { // This is a simplified check, you may need more conditions here
+                      mesh.flipEdge(e);
+                      count++;
+                  }
+              }
+          }
+      }
+      std::cout << "edgeflips" << std::endl;
+      std::cout << count << std::endl;
+      count = 0;
+      //*/
+
     // 4. Flip any new edge that connects an old and new vertex.
+      
+
+      ///*
+      for (VertexIter v = mesh.verticesBegin(); v != mesh.verticesEnd(); ++v) {
+          // Check if the vertex is not new
+          if (!v->isNew) {
+              // Update the vertex position to its calculated new position
+              v->position = v->newPosition;
+              count++;
+          }
+      }
+
+      std::cout << "poschanges" << std::endl;
+      std::cout << count << std::endl;
+      
+      //*/
+
 
     // 5. Copy the new vertex positions into final Vertex::position.
       
+
   }
 }
